@@ -31,8 +31,8 @@ except ModuleNotFoundError:
 
 PROJECT_NAME = 'AuthAlertBot'
 CONFIG_PATH = f'{PROJECT_NAME}.conf'
-STICKER_FOR_UNKNOWN_CHAT = 'CAADAgADlgMAApE3IwyxsiOd7mQmMQI'
-STICKER_FOR_UNKNOWN_USER = 'CAADAgADaAMAApE3Iwzn219CQCZ68AI'
+MESSAGE_FOR_UNKNOWN_CHAT = '🚷 You all <b>don\'t</b> have access to this bot'
+MESSAGE_FOR_UNKNOWN_USER = '🚷 You <b>don\'t</b> have access to this bot'
 
 # Shared variables
 _syslog = False
@@ -41,8 +41,8 @@ _chat_id = None
 _prefix = None
 
 # Variables for threads
-_threads_dict = dict()
-_dead_threads = list()
+_threads_list = list()
+_dead_threads_list = list()
 
 # Use for stop threads
 _run_threads = True
@@ -111,8 +111,11 @@ def save_config(token, chat_id, prefix, syslog, proxy):
     :param syslog: (bool) Saving output to syslog
     :param proxy: (list or tuple or None) Proxy for connect to api.telegram.org
     """
-    if not isinstance(token, str) or not isinstance(chat_id, int) or not isinstance(prefix, str) or \
-       not isinstance(syslog, bool) or not (isinstance(proxy, list) or isinstance(proxy, tuple) or proxy is None):
+    if not isinstance(token, str) \
+            or not isinstance(chat_id, int) \
+            or not isinstance(prefix, str) \
+            or not isinstance(syslog, bool) \
+            or not (isinstance(proxy, list) or isinstance(proxy, tuple) or proxy is None):
         log('Error saving configuration (args) (0)')
         return None
     config = configparser.ConfigParser()
@@ -133,8 +136,9 @@ def save_config(token, chat_id, prefix, syslog, proxy):
     try:
         with open(CONFIG_PATH, "w") as config_file:
             config.write(config_file)
-    except:
+    except Exception as e:
         log('Error saving configuration (1)')
+        log(str(e))
         sys.exit(1)
 
 
@@ -146,15 +150,18 @@ def set_proxy(address, port, username, password):
     :param username: (str) Proxy username
     :param password: (str) Proxy password
     """
-    if not isinstance(address, str) or not isinstance(port, int) or not isinstance(username, str) or \
-       not isinstance(password, str):
+    if not isinstance(address, str) \
+            or not isinstance(port, int) \
+            or not isinstance(username, str) \
+            or not isinstance(password, str):
         log('Error in setup proxy (args) (2)')
         return None
     try:
         socks.set_default_proxy(socks.SOCKS5, address, port=port, username=username, password=password)
         socket.socket = socks.socksocket
-    except:
+    except Exception as e:
         log('Error in setup proxy (3)')
+        log(str(e))
 
 
 def connection_check(token=None):
@@ -175,10 +182,7 @@ def connection_check(token=None):
                 return False
         else:
             r = requests.get('https://api.telegram.org/bot/getMe').json()
-            if r.get('ok', 1) == 1:
-                return False
-            else:
-                return True
+            return not r.get('ok', 1) == 1
     except requests.exceptions.ConnectionError:
         return False
     except json.decoder.JSONDecodeError:
@@ -254,7 +258,7 @@ def setup_dialog():
         print('Checking connection to api.telegram.org')
         if not connection_check():
             print('Error in connection to api.telegram.org (5)')
-            exit(2)
+            exit(5)
         else:
             print('Connection success')
         return address, port, username, password
@@ -327,13 +331,15 @@ def setup_dialog():
                 print('Error in your answer. Please retype again')
 
     def get_prefix():
-        print('Enter message prefix (click \'enter\' for skip )')
+        print('Enter bot prefix (click \'enter\' for skip )')
         while True:
             answer = input()
             if answer == '':
                 return answer
             if ' ' in answer or '/' in answer:
-                print('Please don\'t use / and \' \' in prefix\n Retype prefix again')
+                print('Please don\'t use \'/\' and \' \'(space) in prefix\nRetype prefix again')
+            elif check_ip(answer):
+                print('Please don\'t use IP as prefix\nRetype prefix again')
             else:
                 return answer
 
@@ -351,17 +357,25 @@ def setup_dialog():
     sleep(2)
 
 
-def send_message(message, reply_to_id=0, buttons=None):
+def send_message(message, reply_to_id=0, buttons=None, parse_mode='html', custom_chat_id=None):
     """
     Sending message by telegram bot
     :param message: (str) Message for chat
     :param reply_to_id: (optional) (int) If the message is a reply, ID of the original message
     :param buttons: (optional)(list of lists) Reply buttons
     Example: [['line 1_1', 'line 1_2'], ['line 2_1', {'text': 'line 2_2'}]]
+    :param parse_mode: (optional) (str) Send Markdown or HTML, if you want show bold, italic, fixed-width text
+    or inline URLs in message. Default: HTML
+    :param custom_chat_id:(optional) (int) For sending message to another (not default) chat use this parameter
     :return: (bool) True - success of sending message. False - error
     """
-    if not isinstance(message, str) or not isinstance(reply_to_id, int):
+    if not isinstance(message, str) or not isinstance(reply_to_id, int) \
+            or not (parse_mode is None or isinstance(parse_mode, str)) \
+            or not (custom_chat_id is None or isinstance(custom_chat_id, int)):
         log('Error sending message (args) (13)')
+        return False
+    if parse_mode is not None and parse_mode.lower() != 'html' and parse_mode.lower() != 'markdown':
+        log('Error sending message (args) (13 (2))')
         return False
 
     def markup():
@@ -390,10 +404,10 @@ def send_message(message, reply_to_id=0, buttons=None):
         text = message
     data = \
         {
-            'chat_id': _chat_id,
+            'chat_id': _chat_id if custom_chat_id is None else custom_chat_id,
             'text': text,
-            'parse_mode': 'html',
-            'reply_to_message_id': reply_to_id,
+            'parse_mode': parse_mode,
+            'reply_to_message_id': None if reply_to_id == 0 else reply_to_id,
             'reply_markup': markup()
         }
     try_num = 0
@@ -414,7 +428,7 @@ def send_message(message, reply_to_id=0, buttons=None):
             log('Error in connection to api.telegram.org (16)')
             try_num += 1
         except json.decoder.JSONDecodeError:
-            print('Error in connection to api.telegram.org (17)')
+            log('Error in connection to api.telegram.org (17)')
             try_num += 1
     return True
 
@@ -427,8 +441,10 @@ def message_receiver(message, message_id, username=None, is_group=False):
     :param username: (optional)(str) Telegram username
     :param is_group: (optional)(bool) Target chat is group/supergroup?
     """
-    if not isinstance(message, str) or not isinstance(message_id, int) or \
-       not (username is None or isinstance(username, str)) or not (is_group is None or isinstance(is_group, bool)):
+    if not isinstance(message, str) \
+            or not isinstance(message_id, int) \
+            or not (username is None or isinstance(username, str)) \
+            or not (is_group is None or isinstance(is_group, bool)):
         log('Error in message receiver (args) (18)')
         return None
     command_args = message.split()
@@ -450,7 +466,7 @@ def message_receiver(message, message_id, username=None, is_group=False):
                 send_message('❌ Status request error')
         # /kill_bot
         elif message.lower() == '/kill_bot':
-            kill_message = ''.join(choice(ascii_lowercase) for _ in range(5))
+            kill_message = ''.join(choice(ascii_lowercase) for _ in range(8))
             if send_message(f'Please send \'<code>{kill_message}</code>\' for stopping threads'):
                 _run_threads = kill_message
         # /lock
@@ -529,7 +545,7 @@ def bot_polling(interval=5):
     :param interval: (optional) (int) The interval between polling requests
     """
     if not isinstance(interval, int):
-        log('Error in interval bot polling (args) (19)')
+        log('Error in interval of bot polling (args) (19)')
         return None
     url = f'https://api.telegram.org/bot{_token}/getUpdates'
     while True:
@@ -565,25 +581,16 @@ def bot_polling(interval=5):
                 log('Error in connection to api.telegram.org (23)')
                 sleep(interval)
                 continue
-            if message == '':
-                continue
             if _chat_id != chat_id:
                 if not (chat_type == 'group' or chat_type == 'supergroup'):
-                    tmp_url = f'https://api.telegram.org/bot{_token}/sendSticker'
-                    try:
-                        requests.post(tmp_url, data={'chat_id': chat_id, 'sticker': STICKER_FOR_UNKNOWN_USER})
-                        log(f'User @{username} send \'{message}\' to bot')
-                    except requests.exceptions.ConnectionError:
-                        log('Error sending answer to unknown user (24)')
-                    except json.decoder.JSONDecodeError:
-                        log('Error sending answer to unknown user (25)')
+                    log(f'User {username} send \'{str(message)}\' to bot')
+                    send_message(MESSAGE_FOR_UNKNOWN_USER, custom_chat_id=chat_id)
                     continue
                 else:
-                    log(f'User @{username} send \'{message}\' to chat with bot')
-                    msg_url = f'https://api.telegram.org/bot{_token}/sendSticker'
+                    log(f'User {username} send \'{str(message)}\' to chat with bot')
                     leave_url = f'https://api.telegram.org/bot{_token}/leaveChat'
+                    send_message(MESSAGE_FOR_UNKNOWN_CHAT, custom_chat_id=chat_id)
                     try:
-                        requests.post(msg_url, data={'chat_id': chat_id, 'sticker': STICKER_FOR_UNKNOWN_CHAT})
                         requests.post(leave_url, data={'chat_id': chat_id})
                     except requests.exceptions.ConnectionError:
                         log('Error leaving from unknown chat (26)')
@@ -638,8 +645,9 @@ def check_ip_in_iptables(ip):
             if ip in line and 'DROP' in line:
                 lock_rules += 1
         return lock_rules
-    except:
+    except Exception as e:
         log('Error checking IP (29)')
+        log(str(e))
         return None
 
 
@@ -660,7 +668,7 @@ def lock_ip(ip):
             return False
     except Exception as e:
         log('Error locking IP (31)')
-        send_message('⚠️ Error:\n' + str(e))
+        send_message('⚠️ <b>Error</b>:\n' + str(e))
         return False
 
 
@@ -686,7 +694,7 @@ def unlock_ip(ip):
             return False
     except Exception as e:
         log('Error unlocking IP (33)')
-        send_message('⚠️ Error:\n' + str(e))
+        send_message('⚠️ <b>Error</b>:\n' + str(e))
         return False
 
 
@@ -765,8 +773,8 @@ def check_auth_log():
             log('Error saving configuration (35)')
 
     auth_log_path = '/var/log/auth.log'
-    reg_exp = re.compile(r'(?P<Date>\S{3}\s+\d{1,2}\s+\d{1,2}:\d{2}:\d{2})\s+[^/ ]+\s+sshd\s*\[\d+\]:\s+Accepted\s+'
-                         r'password\s+for\s+(?P<Username>[^/ ]+)\s+from\s+(?P<IP>\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3})')
+    reg_exp = re.compile(r'(?P<Date>\S{3}\s+\d{1,2}\s+\d{1,2}:\d{2}:\d{2})\s+[^/]+\s+sshd\s*\[\d+\]:\s+Accepted\s+'
+                         r'password\s+for\s+(?P<Username>[^/]+)\s+from\s+(?P<IP>\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3})')
     login_list = list()
     try:
         with open(auth_log_path, 'r') as auth_log:
@@ -777,9 +785,9 @@ def check_auth_log():
                     login_list.append(search.groupdict())
                 line = auth_log.readline()
     except FileNotFoundError:
-        log('Error saving configuration (36)')
+        log('Log file not found (36)')
     except PermissionError:
-        log('Error saving configuration (37)')
+        log('Permission access to the log file (37)')
     if not len(login_list):
         return None
     last_date = load_last_date()
@@ -797,7 +805,7 @@ def auth_polling(interval=10):
     :param interval: (optional) (int) The interval between read auth.log
     """
     if not isinstance(interval, int):
-        log('Error in interval auth polling (args) (38)')
+        log('Error in interval of auth polling (args) (38)')
         return None
     while True:
         if not _run_threads:
@@ -818,25 +826,29 @@ def auth_polling(interval=10):
         sleep(interval)
 
 
-def init_thread(func, thread_args=None):
+def init_thread(function, thread_args=None, custom_thread_name=None):
     """
     Initialization thread
-    :param func: Target function for thread
+    :param function: Target function for thread
     :param thread_args: (optional) (list or tuple) Arguments for function in thread
+    :param custom_thread_name: (optional) (str) Name of thread
     :return: (bool) Thread alive status
     """
-    global _threads_dict
-    thread_args = thread_args or list()
-    try:
-        func_name = func.__name__
-    except AttributeError:
+    if custom_thread_name is not None and not isinstance(custom_thread_name, str):
         log('Error initialization thread (args) (39)')
         return False
-    if not isinstance(thread_args, list) and isinstance(thread_args, tuple):
+    global _threads_list
+    thread_args = thread_args or list()
+    try:
+        thread_name = function.__name__ if custom_thread_name is None else custom_thread_name
+    except AttributeError:
         log('Error initialization thread (args) (40)')
         return False
-    thread = threading.Thread(target=func, args=thread_args)
-    _threads_dict[func_name] = thread
+    if not isinstance(thread_args, list) and not isinstance(thread_args, tuple):
+        log('Error initialization thread (args) (41)')
+        return False
+    thread = threading.Thread(target=function, args=thread_args)
+    _threads_list.append((thread_name, thread))
     thread.daemon = True
     thread.start()
     return thread.is_alive()
@@ -848,7 +860,7 @@ def threads_status():
     :return: (str) Threads status. '' - No threads or error
     """
     result = ''
-    for name, thread in _threads_dict.items():
+    for name, thread in _threads_list:
         if not isinstance(thread, threading.Thread):
             continue
         if thread.is_alive():
@@ -863,15 +875,15 @@ def threads_wait():
     """
     Waiting end of threads (sending notification if thread is dead) and exit
     """
-    global _threads_dict
-    global _dead_threads
+    global _threads_list
+    global _dead_threads_list
     while True:
-        for name, thread in _threads_dict.items():
-            if not thread.is_alive() and name not in _dead_threads:
+        for name, thread in _threads_list:
+            if not thread.is_alive() and name not in _dead_threads_list:
                 send_message(f'❌ Thread <b>{name}</b> is dead')
-                log(f'Thread {name} is dead (41)')
-                _dead_threads.append(name)
-        if len(_threads_dict) == len(_dead_threads):
+                log(f'Thread {name} is dead (42)')
+                _dead_threads_list.append(name)
+        if len(_threads_list) == len(_dead_threads_list):
             send_message('❌ <b>Main</b> thread is dead')
             log('All threads is dead')
             exit()
@@ -887,7 +899,7 @@ def main():
     start_check()
     settings = load_config()
     if not settings:
-        print('Error in loading config (42)')
+        print('Error in loading config (43)')
         return None
 
     if settings[3] == '1':
@@ -899,7 +911,7 @@ def main():
         set_proxy(*settings[4])
 
     if not connection_check(settings[0]):
-        log('Error in connection to api.telegram.org (43)')
+        log('Error in connection to api.telegram.org (44)')
         exit(43)
 
     _token = settings[0]
@@ -924,4 +936,4 @@ if __name__ == '__main__':
         else:
             main()
     except KeyboardInterrupt:
-        exit()
+        sys.exit()

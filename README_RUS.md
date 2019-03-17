@@ -1,8 +1,6 @@
-
-
 # AuthAlertBot
 
-![](https://img.shields.io/appveyor/ci/gruntjs/grunt.svg)![](https://img.shields.io/badge/platform-linux-lightgrey.svg)![](https://img.shields.io/badge/python-3.6%20%7C%203.7-blue.svg)![](https://img.shields.io/badge/version-1.0-yellow.svg)![](https://img.shields.io/badge/license-MIT-orange.svg)
+![](https://img.shields.io/appveyor/ci/gruntjs/grunt.svg)![](https://img.shields.io/badge/platform-linux-lightgrey.svg)![](https://img.shields.io/badge/python-3.6%20%7C%203.7-blue.svg)![](https://img.shields.io/badge/version-1.1-yellow.svg)![](https://img.shields.io/badge/license-MIT-orange.svg)
 
 ## Описание
 
@@ -87,7 +85,7 @@ P.S. Если вы будите использовать несколько бо
 
 Для коллективного использования бота / ботов несколькими пользователями необходимо создать группу / супергруппу и добавить в нее бота / ботов, а так же остальных пользователей. После создания группы необходимо **изменить privacy mode** бота в состояние **disabled**. В противном случае бот не сможет получить chat_id. После выполнения данных действий можно приступить к настройке back end'а бота.
 
-При использовании бота / ботов в группах вы можете точечно (для обработки в конкретном боте) делать блокировки/разблокировки указывая в команде 2-м аргументом префикс указанный при настройке back end'а. В ином случае команда будет выполнена всеми ботами.
+При использовании бота / ботов в группах вы можете точечно (для обработки в конкретном боте) делать блокировки / разблокировки указывая в команде 2-м аргументом префикс указанный при настройке back end'а. В ином случае команда будет выполнена всеми ботами.
 
 **ВНИМАНИЕ:** При конвертации группы в супергруппу меняется chat_id, что требует нового сканирования chat_id.
 
