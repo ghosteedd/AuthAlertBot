@@ -292,7 +292,7 @@ def setup_dialog():
                 sleep(5)
                 continue
             except json.decoder.JSONDecodeError:
-                print('Error in connection to api.telegram.org (8)')
+                print('Page decoding error (8)')
                 continue
             if not data.get('ok'):
                 sleep(5)
@@ -306,7 +306,7 @@ def setup_dialog():
                 except requests.exceptions.ConnectionError:
                     print('Error in connection to api.telegram.org (9)')
                 except json.decoder.JSONDecodeError:
-                    print('Error in connection to api.telegram.org (10)')
+                    print('Page decoding error (10)')
                 if message.lower() == access_message:
                     url = f'https://api.telegram.org/bot{bot_token}/sendMessage'
                     try:
@@ -314,7 +314,7 @@ def setup_dialog():
                     except requests.exceptions.ConnectionError:
                         print('Error in connection to api.telegram.org (11)')
                     except json.decoder.JSONDecodeError:
-                        print('Error in connection to api.telegram.org (12)')
+                        print('Page decoding error (12)')
                     print(f'Ok. Your chat id: {chat_id}')
                     return chat_id
             sleep(2)
@@ -428,7 +428,7 @@ def send_message(message, reply_to_id=0, buttons=None, parse_mode='html', custom
             log('Error in connection to api.telegram.org (16)')
             try_num += 1
         except json.decoder.JSONDecodeError:
-            log('Error in connection to api.telegram.org (17)')
+            log('Page decoding error (17)')
             try_num += 1
     return True
 
@@ -558,7 +558,7 @@ def bot_polling(interval=5):
             sleep(interval)
             continue
         except json.decoder.JSONDecodeError:
-            log('Error in connection to api.telegram.org (21)')
+            log('Page decoding error (21)')
             sleep(interval)
             continue
         if not data.get('ok'):
@@ -578,7 +578,7 @@ def bot_polling(interval=5):
                 sleep(interval)
                 continue
             except json.decoder.JSONDecodeError:
-                log('Error in connection to api.telegram.org (23)')
+                log('Page decoding error (23)')
                 sleep(interval)
                 continue
             if _chat_id != chat_id:
@@ -701,7 +701,7 @@ def unlock_ip(ip):
 def check_auth_log():
     """
     Checking auth.log for new login
-    :return: {'Date', 'Username', 'IP'}. None if not exists new logins
+    :return: {'Date', 'Username', 'IP'}. None if not exists new login
     """
 
     def convert_date_str_to_datetime(string_date):
@@ -773,8 +773,9 @@ def check_auth_log():
             log('Error saving configuration (35)')
 
     auth_log_path = '/var/log/auth.log'
-    reg_exp = re.compile(r'(?P<Date>\S{3}\s+\d{1,2}\s+\d{1,2}:\d{2}:\d{2})\s+[^/]+\s+sshd\s*\[\d+\]:\s+Accepted\s+'
-                         r'password\s+for\s+(?P<Username>[^/]+)\s+from\s+(?P<IP>\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3})')
+    reg_exp = re.compile(r'(?P<Date>\S{3}\s+\d{1,2}\s+\d{1,2}:\d{2}:\d{2})\s+[^/\s]+\s+sshd\s*\[\d+\]:\s+'
+                         r'Accepted\s+(password|publickey)\s+for\s+(?P<Username>[^/\s]+)\s+'
+                         r'from\s+(?P<IP>\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3})')
     login_list = list()
     try:
         with open(auth_log_path, 'r') as auth_log:
@@ -879,10 +880,10 @@ def threads_wait():
     global _dead_threads_list
     while True:
         for name, thread in _threads_list:
-            if not thread.is_alive() and name not in _dead_threads_list:
+            if not thread.is_alive() and thread not in _dead_threads_list:
                 send_message(f'❌ Thread <b>{name}</b> is dead')
                 log(f'Thread {name} is dead (42)')
-                _dead_threads_list.append(name)
+                _dead_threads_list.append(thread)
         if len(_threads_list) == len(_dead_threads_list):
             send_message('❌ <b>Main</b> thread is dead')
             log('All threads is dead')
